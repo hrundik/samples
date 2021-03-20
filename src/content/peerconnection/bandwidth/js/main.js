@@ -14,9 +14,24 @@ const localVideo = document.querySelector('video#localVideo');
 const callButton = document.querySelector('button#callButton');
 const hangupButton = document.querySelector('button#hangupButton');
 const bandwidthSelector = document.querySelector('select#bandwidth');
+const codecsSelector = document.querySelector("select#codec");
 hangupButton.disabled = true;
 callButton.onclick = call;
 hangupButton.onclick = hangup;
+
+window.onload = () => {
+  setTimeout(() => {
+    const codecs = RTCRtpSender.getCapabilities("video").codecs
+      .map(c => `${c.mimeType} ${c.sdpFmtpLine || ''}`)
+      .filter(codec => ['rtx', 'fec', 'red', 'packetization-mode=0;'].every(f => codec.indexOf(f) == -1));
+
+    codecs.forEach(c => {
+      const el = document.createElement("option");
+      el.text = c;
+      codecsSelector.add(el);
+    });
+  }, 1000);
+};
 
 let pc1;
 let pc2;
@@ -49,6 +64,13 @@ function gotStream(stream) {
   localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
   console.log('Adding Local Stream to peer connection');
 
+  const {codecs} = RTCRtpSender.getCapabilities('video');
+  const pickedCodec = codecsSelector.options[codecsSelector.selectedIndex].value;
+  const [mimeType, sdpFmtpLine] = pickedCodec.split(' ');
+  codecs.sort((a, b) => a.mimeType == mimeType && a.sdpFmtpLine == sdpFmtpLine ? -1 : b.mimeType == mimeType && b.sdpFmtpLine == sdpFmtpLine ? 1 : 0);
+  console.log(codecs);
+  pc1.getTransceivers()[0].setCodecPreferences(codecs);
+  console.log("picked codec:", pickedCodec);
   pc1.createOffer(
       offerOptions
   ).then(
